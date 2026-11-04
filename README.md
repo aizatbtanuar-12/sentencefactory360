@@ -2,7 +2,7 @@
 
 **BUILD IT. SNAP IT. READ IT.**
 
-A tablet learning station for Year 3 English. Pupils build a sentence from **WHO? · WHAT HAPPENS? · WHERE? · WHEN?** cards, take a selfie, and record themselves reading it aloud. The teacher reviews each submission, approves it, and prints an **A6 learning card** with a QR code that plays the child's voice. The cards go up on the classroom Learning Gallery wall.
+A tablet learning station for Year 3 English, for **one teacher or a whole school**. Pupils build a sentence from **WHO? · WHAT HAPPENS? · WHERE? · WHEN?** cards, take a selfie, and record themselves reading it aloud. The teacher reviews each submission, approves it, and prints an **A6 learning card** with a QR code that plays the child's voice. The cards go up on the classroom Learning Gallery wall.
 
 > **Every child can build a sentence. Every child deserves to be heard.**
 
@@ -40,7 +40,7 @@ A step-by-step testing checklist is in **[TESTING.md](TESTING.md)**.
 
 ### Pupils (no accounts, no passwords)
 1. **Welcome**: a big "I'M A STUDENT" button, and a smaller "Teacher Zone" button.
-2. **Me**: the pupil types their name, taps their class and enters the classroom code.
+2. **Me**: the pupil types their name, taps their class (shown with the teacher's name and photo) and enters the classroom code. The code unlocks that teacher's word bank.
 3. **Build**: four colour-coded word columns. The sentence appears in a large preview as the pupil taps cards.
    - 🔊 *Read it to me* (text-to-speech). Each word is also read aloud when tapped.
    - 🎲 *Surprise me!* builds a random sentence that is always grammatically correct.
@@ -52,12 +52,19 @@ A step-by-step testing checklist is in **[TESTING.md](TESTING.md)**.
 6. **Done**: "WELL DONE, AINA!" with confetti and encouraging badges (*First Sentence Built!*, *Confident Speaker!*, *Sentence Superstar!*, *Creative Word Builder!*). The badges never rank or compare children.
    - Everything about that pupil (name, code, photo, voice) is **wiped** before the next child starts. This happens when they tap *Next student*, after 60 seconds, or after 4 minutes of no activity.
 
+### Teachers (each with their own profile, classes and pupils)
+- **Sign-up with a school code.** New teachers register on the Teacher Zone screen using the **school code** set by the admin. The very first teacher uses the setup code (the `INITIAL_TEACHER_PIN` secret) and becomes the **school admin**.
+- **Tap your name + PIN.** The login screen lists every teacher with their photo. Each teacher has their own 4–8 digit PIN.
+- **Profile:** title (Teacher / Cikgu / Puan…), name, school, subject, photo and a welcome message. Pupils see the name and photo when they pick their class, the welcome message on the build screen, and "sent to Cikgu Ali!" when they finish. The name, school and subject are printed on the A6 cards.
+- **Kept separate:** each teacher has their own classes and access codes, word bank, Word of the Day, Challenge, photo-required setting, submissions, gallery and cards. A teacher can never see another teacher's pupils.
+- **School admin** (Settings → School): sets the school name and school code, sees all teachers, resets a forgotten PIN, makes another teacher admin, or removes a teacher. Removing a teacher deletes their classes and all their pupils' photos and recordings.
+
 ### Teacher Zone (PIN protected, checked on the server)
 - **Overview**: total / pending / approved / rejected counts, plus a "waiting for you" list that refreshes every 20 seconds.
 - **Submissions**: filter by All / Pending / Approved / Rejected and by class, and search. Opening a submission shows the photo, sentence and audio player. Buttons: **Approve**, **Reject**, **Approve & next**, back to pending, delete.
 - **Printable A6 card** (approved only): Print, or Download PDF. **Print all cards** for a class in one go.
 - **Digital Learning Gallery**: approved cards with photo, sentence and audio, filterable by class.
-- **Settings**: classroom name, photo required on/off, classes and access codes, word bank (add/remove, mark WHO words as "more than one"), **Word of the Day**, **Sentence Challenge** (with presets), change PIN.
+- **Settings** (tabs): My profile · My classes & codes (+ photo required on/off) · Word bank (add/remove, mark WHO words as "more than one") · **Word of the Day** · **Sentence Challenge** (with presets) · My PIN · **School** (admin only).
 - The Teacher Zone locks itself after 15 minutes of no use. Sessions last 8 hours at most.
 
 ---
@@ -71,7 +78,8 @@ npm install
 npm run dev:demo          # open http://localhost:5173
 ```
 
-- Class: **3 Bestari** · Class code: **FACTORY1** · Teacher PIN: **1234**
+- Teacher: **Teacher Rina** (admin), PIN **1234** · Class: **3 Bestari**, code **FACTORY1**
+- Try signing up a second teacher with school code **SCHOOL1**
 - The camera and microphone work on `localhost`. On any other address they need **HTTPS**.
 
 To put demo mode on Netlify (for a trial, not real pupils), set the environment variable `VITE_DEMO_MODE=true`.
@@ -119,9 +127,11 @@ supabase link --project-ref YOUR-PROJECT-REF      # the "abcd1234" part of the U
 supabase db push                                   # runs supabase/migrations/*.sql
 ```
 
-*No CLI?* Open **SQL Editor → New query**, paste the whole of `supabase/migrations/20261104000000_sentence_factory.sql`, and click **Run**. The file is safe to run more than once.
+*No CLI?* Open **SQL Editor → New query**, paste the whole of the first migration file and click **Run**, then do the same with the second. Both are safe to run more than once.
 
-This creates the `app_settings`, `classes`, `word_bank`, `submissions` and `login_attempts` tables. It also creates the **private** storage bucket `submissions` (6 MB per file) and seeds the starter word bank plus one class (**3 Bestari**, code **FACTORY1**).
+There are **two** migration files and they must both run, in order: `20261104000000_sentence_factory.sql`, then `20261105000000_multi_teacher.sql`. `supabase db push` does this for you. In the SQL Editor, paste and run them one after the other.
+
+Together they create the `app_settings`, `teachers`, `classes`, `word_bank`, `submissions` and `login_attempts` tables. It also creates the **private** storage bucket `submissions` (6 MB per file) and seeds the school's default word bank (copied to each new teacher) plus one class (**3 Bestari**, code **FACTORY1**). That class belongs to whoever signs up first.
 
 ### 4.3 Set the server secrets
 ```bash
@@ -131,7 +141,7 @@ Edit `supabase/functions/.env`:
 
 | Secret | What to put |
 |---|---|
-| `INITIAL_TEACHER_PIN` | A 4–8 digit PIN for the **first** login (e.g. `583921`). You'll change it in the app afterwards. |
+| `INITIAL_TEACHER_PIN` | A 4–8 digit **setup code** (e.g. `583921`). The first teacher types it as the "school code" to create the admin account. It stays the school code until the admin sets a new one. |
 | `TEACHER_SESSION_SECRET` | A long random string. Generate one with `openssl rand -hex 32`. |
 | `ALLOWED_ORIGINS` | Your site address(es), comma-separated, e.g. `https://sentence-factory.netlify.app,http://localhost:5173`. |
 
@@ -194,12 +204,18 @@ Netlify gives you HTTPS automatically. Browsers need HTTPS for the camera and mi
 
 ## 6. First-day setup: class code and teacher PIN
 
-1. Open the site on the classroom tablet (Chrome). Tap **Teacher Zone** and enter your `INITIAL_TEACHER_PIN`.
-2. **Settings → Change teacher PIN**: choose your own PIN. From then on it is stored only as a secure (PBKDF2) hash in the database, and `INITIAL_TEACHER_PIN` is no longer used. Changing the PIN signs out every other device.
-3. **Settings → Classes & access codes**: rename *3 Bestari* or add your classes. Give each one a code (🎲 *Make code* creates a random one), or **change FACTORY1**.
-4. **Settings → Word bank**: add your own vocabulary. Tick *more than one* for plural WHO words (e.g. *The cats*) so the checker can help with is/are.
-5. Optional: set a **Word of the Day** and a **Sentence Challenge**, or turn **Photo is required** off for pupils without photo consent.
-6. Tap **🔒 Lock & exit** before handing the tablet to pupils.
+**The first teacher (the school admin):**
+1. Open the site on the classroom tablet (Chrome) and tap **Teacher Zone**. Because nobody has signed up yet, you'll see **"Set up the first teacher"**.
+2. For **School code**, type your `INITIAL_TEACHER_PIN`. Then fill in your title, name, school and subject, and choose **your own PIN**. You are now the school admin. Any class or submission created before teachers existed (e.g. the seeded *3 Bestari / FACTORY1*) now belongs to you.
+3. **Settings → School**: set a **school code** of your own (🎲 *Make code*) and give it to colleagues. From then on, `INITIAL_TEACHER_PIN` no longer works for signing up.
+4. **Settings → My profile**: add your photo and a welcome message for your pupils.
+5. **Settings → My classes**: rename *3 Bestari*, change **FACTORY1**, or add your classes. Each class has its own access code.
+6. **Settings → Word bank / Word of the Day / Challenge**: make them your own. Tick *more than one* for plural WHO words (e.g. *The cats*).
+7. Tap **🔒 Lock & exit** before handing the tablet to pupils.
+
+**Other teachers:** Teacher Zone → **New teacher? Sign up**. Enter the school code from the admin, then your profile and PIN. Each new teacher starts with a copy of the default word bank and no classes, then adds their own classes in **Settings → My classes**.
+
+**Forgotten PIN:** the admin opens **Settings → School → 🔑 Reset PIN** next to that teacher. If the only admin forgets their PIN, run this in the Supabase SQL Editor: `update teachers set pin_hash = null where name = 'Rina';`. They can then log in once with `INITIAL_TEACHER_PIN` as their PIN, and should set a new one in **Settings → My PIN**.
 
 **Tablet tips:** In Chrome, open the site, then go to **⋮ → Add to Home screen** for a full-screen app icon. Allow camera and microphone the first time Chrome asks. Turn the volume up, and consider Android **screen pinning** so pupils stay in the app.
 
@@ -228,13 +244,15 @@ Single card: **Submissions → open → 🖨️ Printable card**. A whole class:
 
 | Requirement | How it's met |
 |---|---|
-| Teacher PIN checked on the server | `teacher` function. PBKDF2-SHA256 (150k iterations) hash in the DB, constant-time compare. The PIN is never in frontend code. |
+| Teacher PIN checked on the server | `teacher` function. Each teacher's PIN is stored as a PBKDF2-SHA256 (150k iterations) hash, compared in constant time. PINs are never in frontend code. |
+| Teachers kept apart | Every teacher query on the server is filtered by the signed-in teacher's id. Opening, approving or deleting another teacher's submission returns "not found". Admin-only actions return 403 for other teachers. *(Verified by 62 automated checks against a real database.)* |
+| Sign-up | Needs the school code, which counts towards the same lockout as wrong PINs. Duplicate teacher names are refused. |
 | Brute-force protection | After 8 wrong PINs from one address, or 40 overall, in 15 minutes → locked for 15 minutes. |
-| Teacher session | HMAC-signed token (8 h) in `sessionStorage`. Auto-lock after 15 minutes idle. Changing the PIN signs out all sessions. |
+| Teacher session | HMAC-signed token (8 h) naming one teacher, kept in `sessionStorage`. Auto-lock after 15 minutes idle. A PIN change or admin reset signs that teacher out everywhere. A removed teacher is signed out at once. |
 | Service-role key never in the browser | Only the Edge Functions use it (provided by Supabase). The frontend uses the public anon key. |
 | RLS / no direct table access | RLS on every table, no policies, privileges revoked from `anon`/`authenticated`. *(Verified: `select` as `anon` → "permission denied".)* |
 | Classroom code validated | `student` function checks the code for every verify and **every submission**. |
-| Pupils can't see others' work | The student endpoint has no "read submissions" action at all. |
+| Pupils can't see others' work | The student endpoint has no "read submissions" action at all. The class list shows names only. Access codes are never sent to the tablet, and a class's words are only returned after its code is entered. |
 | Input validation | The server rebuilds the sentence itself and only accepts word-bank phrases (or their is/are-fixed form). Names are cleaned. File types and sizes are checked. |
 | Private media | Bucket `submissions` is private. The dashboard uses 1-hour signed URLs. The QR page gets a fresh 30-minute signed URL per scan, and only for **approved** work. |
 | Listen page | Shows the pupil's name, class, sentence and voice. **No photo** (the card on the wall already has it). |
@@ -249,6 +267,7 @@ Single card: **Submissions → open → 🖨️ Printable card**. A whole class:
 |---|---|
 | "Setup needed: add your Supabase details" | `VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY` are missing in Netlify. Add them and redeploy. |
 | "Failed to fetch" / CORS errors | Add your exact site address (with `https://`, no trailing `/`) to `ALLOWED_ORIGINS`, then run `supabase secrets set` again. |
+| "Could not find the table 'public.teachers'" | The second migration hasn't been run. Run `20261105000000_multi_teacher.sql` in the SQL Editor. |
 | "INITIAL_TEACHER_PIN is not configured" / "TEACHER_SESSION_SECRET is not configured" | Set the secrets (4.3). The PIN must be 4–8 digits. The secret must be 24+ characters. |
 | 401 "Invalid JWT" from functions | They were deployed without `--no-verify-jwt`. Deploy again with it. |
 | Camera / microphone won't start | The site must be **HTTPS**. Check Chrome **⋮ → Settings → Site settings → Camera/Microphone** for the site. Close other apps using the camera. Pupils can still use *Upload*. |
@@ -274,11 +293,13 @@ sentence-factory-360/
 │  ├─ lib/                       sentence logic & checker, sounds, speech, media, QR, PDF
 │  ├─ components/                Gizmo mascot, SentenceCard (A6), shared UI
 │  ├─ student/                   Welcome, Identify, Build, Photo, Voice, Success
-│  ├─ teacher/                   PinLogin, Overview, Submissions, ReviewModal, Gallery, CardPage, Settings
+│  ├─ teacher/                   PinLogin (pick name + PIN, sign-up), Overview, Submissions, ReviewModal, Gallery, CardPage, Settings (profile, classes, words, school admin)
 │  └─ pages/Listen.tsx           public QR playback page
 └─ supabase/
    ├─ config.toml                functions: verify_jwt = false
-   ├─ migrations/…sql            tables, RLS lockdown, private bucket, seed data
+   ├─ migrations/…sql            ① tables, RLS lockdown, private bucket, seed data  ② teachers + per-teacher data
+   ├─ dashboard-paste/*.ts       single-file functions for the dashboard editor (generated)
+   ├─ build-dashboard-paste.py   regenerates dashboard-paste/ after editing functions/
    └─ functions/
       ├─ _shared/util.ts         CORS, admin client, PIN hashing, signed sessions
       ├─ _shared/sentence.ts     same sentence logic as the browser (keep in sync)

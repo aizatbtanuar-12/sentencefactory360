@@ -53,6 +53,12 @@ export default function Listen() {
             <p className="muted">
               {data.class_name} · {data.classroom_name}
             </p>
+            {data.teacher_name && (
+              <p className="listen-teacher">
+                {data.teacher_photo_url && <img src={data.teacher_photo_url} alt="" />}
+                <span>with {data.teacher_name}</span>
+              </p>
+            )}
             <p className="listen-sentence">“{data.sentence}”</p>
             <audio ref={audio} src={data.audio_url} preload="auto" onEnded={() => setPlaying(false)} />
             <button className={`play-big ${playing ? 'on' : ''}`} onClick={toggle} aria-label={playing ? 'Stop' : 'Play recording'}>

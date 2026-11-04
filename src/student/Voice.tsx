@@ -179,7 +179,7 @@ export function Voice({
         {
           id: draft.id,
           pupil_name: draft.name,
-          class_name: draft.className,
+          class_id: draft.classId,
           access_code: draft.code,
           who: draft.parts.who!,
           what: draft.parts.what!,

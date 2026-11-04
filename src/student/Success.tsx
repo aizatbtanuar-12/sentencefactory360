@@ -48,7 +48,7 @@ export function Success({ config, draft, onNext }: { config: StudentConfig; draf
       </div>
       <Mascot size={170} mood="cheer" className="bounce" />
       <h1 className="success-title">WELL DONE, {first.toUpperCase()}!</h1>
-      <p className="success-sub">Your sentence has been sent to your teacher! 📬</p>
+      <p className="success-sub">Your sentence has been sent to {config.teacher.display_name}! 📬</p>
       <div className="success-sentence">“{sentence}”</div>
       <div className="badges">
         {badges.map((b, i) => (

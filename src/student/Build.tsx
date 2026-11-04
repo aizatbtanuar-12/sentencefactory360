@@ -121,8 +121,19 @@ export function Build({
 
   return (
     <div className="build">
-      {(wod || challenge) && (
+      {(wod || challenge || config.teacher.welcome_message) && (
         <div className="extras-row">
+          {config.teacher.welcome_message && (
+            <button className="extra-card teacher-msg" onClick={() => say(config.teacher.welcome_message ?? '')}>
+              <span className="teacher-msg-photo">
+                {config.teacher.photo_url ? <img src={config.teacher.photo_url} alt="" /> : <span>🧑‍🏫</span>}
+              </span>
+              <span className="teacher-msg-text">
+                <span className="extra-kicker">{config.teacher.display_name} says</span>
+                <span className="extra-sub strong">{config.teacher.welcome_message}</span>
+              </span>
+            </button>
+          )}
           {wod && (
             <button className={`extra-card wod ${wodUsed ? 'met' : ''}`} onClick={() => say(`${wod.word}. ${wod.meaning ?? ''}`)}>
               <span className="extra-kicker">🌟 Word of the Day</span>

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { api, backendReady, isDemo, type StudentConfig } from '../api';
+import { api, backendReady, isDemo, type StudentConfig, type StudentHome } from '../api';
 import { Mascot } from '../components/Mascot';
 import { Confirm, Modal, OfflineBanner, Spinner } from '../components/ui';
 import { useIdle } from '../lib/hooks';
@@ -19,6 +19,7 @@ export type Step = 'welcome' | 'id' | 'build' | 'photo' | 'voice' | 'done';
 export interface Draft {
   id: string;
   name: string;
+  classId: string;
   className: string;
   code: string;
   parts: Partial<SentenceParts>;
@@ -34,6 +35,7 @@ export interface Draft {
 export const emptyDraft = (): Draft => ({
   id: crypto.randomUUID(),
   name: '',
+  classId: '',
   className: '',
   code: '',
   parts: {},
@@ -59,6 +61,7 @@ const IDLE_MS = 4 * 60_000;
 export default function StudentApp() {
   const nav = useNavigate();
   const [step, setStep] = useState<Step>('welcome');
+  const [home, setHome] = useState<StudentHome | null>(null);
   const [config, setConfig] = useState<StudentConfig | null>(null);
   const [configError, setConfigError] = useState('');
   const [draft, setDraft] = useState<Draft>(emptyDraft);
@@ -71,7 +74,7 @@ export default function StudentApp() {
   const loadConfig = useCallback(async () => {
     setConfigError('');
     try {
-      setConfig(await api.student.config());
+      setHome(await api.student.home());
     } catch (e) {
       setConfigError((e as Error).message);
     }
@@ -90,10 +93,11 @@ export default function StudentApp() {
     if (d.audioUrl) URL.revokeObjectURL(d.audioUrl);
     stopSpeaking();
     setDraft(emptyDraft());
+    setConfig(null);
     setIdleWarn(false);
     setConfirmQuit(false);
     setStep('welcome');
-    void loadConfig(); // pick up any word-bank changes the teacher made
+    void loadConfig(); // pick up any new classes
   }, [loadConfig]);
 
   useIdle(IDLE_MS, () => setIdleWarn(true), step !== 'welcome' && step !== 'done' && !idleWarn);
@@ -123,17 +127,17 @@ export default function StudentApp() {
       <>
         <OfflineBanner />
         <Welcome
-          classroomName={config?.classroom_name}
+          classroomName={home?.school_name}
           onStudent={() => go('id')}
           onTeacher={() => nav('/teacher')}
-          disabled={!config}
+          disabled={!home}
           notice={
             !backendReady
               ? 'Setup needed: add your Supabase details (see README).'
               : configError
                 ? configError
                 : isDemo
-                  ? 'Demo mode — data stays on this device. Teacher PIN: 1234 · Class code: FACTORY1'
+                  ? 'Demo mode — data stays on this device. Teacher Rina’s PIN: 1234 · Class code: FACTORY1 · New-teacher school code: SCHOOL1'
                   : ''
           }
           onRetry={configError ? loadConfig : undefined}
@@ -176,10 +180,21 @@ export default function StudentApp() {
       </header>
 
       <main className="student-main">
-        {!config ? (
+        {!home ? (
           <Spinner label="Starting the factory machines…" />
         ) : step === 'id' ? (
-          <Identify config={config} draft={draft} update={update} onBack={() => go('welcome')} onNext={() => go('build')} />
+          <Identify
+            home={home}
+            draft={draft}
+            update={update}
+            onBack={() => go('welcome')}
+            onVerified={(cfg) => {
+              setConfig(cfg);
+              go('build');
+            }}
+          />
+        ) : !config ? (
+          <Spinner />
         ) : step === 'build' ? (
           <Build
             config={config}

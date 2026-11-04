@@ -1,4 +1,4 @@
-import { ApiError, type Api, type Submission } from './types';
+import { ApiError, type Api, type LoginResult, type LoginTeacher, type Submission } from './types';
 import { clearToken, getToken, setToken } from './session';
 
 const URL_BASE = (import.meta.env.VITE_SUPABASE_URL as string | undefined)?.replace(/\/+$/, '') ?? '';
@@ -51,15 +51,15 @@ const t = <T>(action: string, extra: Record<string, unknown> = {}) => call<T>('t
 export const supabaseApi: Api = {
   mode: 'supabase',
   student: {
-    config: () => call('student', { action: 'config' }),
-    verify: (class_name, access_code) => call('student', { action: 'verify', class_name, access_code }),
+    home: () => call('student', { action: 'classes' }),
+    verify: (class_id, access_code) => call('student', { action: 'verify', class_id, access_code }),
     submit: (p, onProgress) =>
       new Promise((resolve, reject) => {
         if (!supabaseConfigured) return reject(new ApiError('The app is not connected to Supabase yet.', 0));
         const fd = new FormData();
         fd.set('id', p.id);
         fd.set('pupil_name', p.pupil_name);
-        fd.set('class_name', p.class_name);
+        fd.set('class_id', p.class_id);
         fd.set('access_code', p.access_code);
         fd.set('who', p.who);
         fd.set('what', p.what);
@@ -91,8 +91,14 @@ export const supabaseApi: Api = {
       }),
   },
   teacher: {
-    login: async (pin) => {
-      const r = await call<{ token: string; expires_at: number; using_initial_pin: boolean }>('teacher', { action: 'login', pin });
+    teachers: async () => (await call<{ teachers: LoginTeacher[] }>('teacher', { action: 'teachers' })).teachers,
+    register: async (p) => {
+      const r = await call<LoginResult>('teacher', { action: 'register', ...p });
+      setToken(r.token, r.expires_at);
+      return r;
+    },
+    login: async (teacher_id, pin) => {
+      const r = await call<LoginResult>('teacher', { action: 'login', teacher_id, pin });
       setToken(r.token, r.expires_at);
       return r;
     },
@@ -106,6 +112,9 @@ export const supabaseApi: Api = {
     cards: async (f) => (await t<{ submissions: Submission[] }>('cards', f)).submissions,
     getSettings: () => t('get_settings'),
     updateSettings: async (p) => void (await t('update_settings', p)),
+    updateProfile: async (p) => void (await t('update_profile', { ...p })),
+    setPhoto: async (data_url) => void (await t('set_photo', { data_url })),
+    removePhoto: async () => void (await t('remove_photo')),
     classAdd: async (name, access_code) => void (await t('class_add', { name, access_code })),
     classUpdate: async (id, name, access_code) => void (await t('class_update', { id, name, access_code })),
     classDelete: async (id) => void (await t('class_delete', { id })),
@@ -115,6 +124,10 @@ export const supabaseApi: Api = {
       const r = await t<{ token: string; expires_at: number }>('change_pin', { current_pin, new_pin });
       setToken(r.token, r.expires_at);
     },
+    schoolUpdate: async (p) => void (await t('school_update', p)),
+    resetTeacherPin: async (teacher_id, new_pin) => void (await t('teacher_reset_pin', { teacher_id, new_pin })),
+    setAdmin: async (teacher_id, is_admin) => void (await t('teacher_set_admin', { teacher_id, is_admin })),
+    removeTeacher: async (teacher_id) => void (await t('teacher_remove', { teacher_id })),
   },
   listen: (token) => call('listen', { token }),
 };

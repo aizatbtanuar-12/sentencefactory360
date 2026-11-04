@@ -221,3 +221,25 @@
     animation: none !important;
   }
 }
+.a6-teacher {
+  display: flex;
+  align-items: center;
+  gap: 1.5mm;
+  margin-top: 1.2mm;
+}
+.a6-teacher-photo {
+  width: 7mm;
+  height: 7mm;
+  border-radius: 50%;
+  object-fit: cover;
+  flex: 0 0 auto;
+}
+.a6-teacher-name {
+  font-size: 7.5pt;
+  font-weight: 800;
+  color: #315b91;
+  line-height: 1.1;
+}
+.a6-teacher .a6-classroom {
+  margin-top: 0.2mm;
+}

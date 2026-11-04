@@ -1,29 +1,29 @@
 import { useState } from 'react';
-import { api, type StudentConfig } from '../api';
+import { api, type StudentConfig, type StudentHome } from '../api';
 import { Mascot } from '../components/Mascot';
 import { cleanName } from '../lib/sentence';
 import { sfx } from '../lib/sounds';
 import type { Draft } from './StudentApp';
 
 export function Identify({
-  config,
+  home,
   draft,
   update,
   onBack,
-  onNext,
+  onVerified,
 }: {
-  config: StudentConfig;
+  home: StudentHome;
   draft: Draft;
   update: (p: Partial<Draft>) => void;
   onBack: () => void;
-  onNext: () => void;
+  onVerified: (cfg: StudentConfig) => void;
 }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
-  const classes = config.classes;
-  const className = draft.className || (classes.length === 1 ? classes[0] : '');
+  const classes = home.classes;
+  const classId = draft.classId || (classes.length === 1 ? classes[0].id : '');
 
-  const ready = cleanName(draft.name).length > 0 && !!className && draft.code.trim().length >= 4;
+  const ready = cleanName(draft.name).length > 0 && !!classId && draft.code.trim().length >= 4;
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -31,10 +31,10 @@ export function Identify({
     setBusy(true);
     setError('');
     try {
-      const r = await api.student.verify(className, draft.code);
-      update({ name: cleanName(draft.name), className: r.class_name });
+      const cfg = await api.student.verify(classId, draft.code);
+      update({ name: cleanName(draft.name), classId: cfg.class_id, className: cfg.class_name });
       sfx.complete();
-      onNext();
+      onVerified(cfg);
     } catch (err) {
       sfx.oops();
       setError((err as Error).message);
@@ -68,21 +68,27 @@ export function Identify({
       <div className="field">
         <span className="field-label">🏫 My class</span>
         {classes.length === 0 ? (
-          <p className="hint">Your teacher has not added a class yet.</p>
+          <p className="hint">No classes yet. Ask your teacher to add your class in the Teacher Zone.</p>
         ) : (
           <div className="class-grid">
             {classes.map((c) => (
               <button
                 type="button"
-                key={c}
-                className={`chip chip-class ${className === c ? 'selected' : ''}`}
+                key={c.id}
+                className={`chip chip-class class-card ${classId === c.id ? 'selected' : ''}`}
                 onClick={() => {
                   sfx.tap();
-                  update({ className: c });
+                  update({ classId: c.id, className: c.name });
                 }}
-                aria-pressed={className === c}
+                aria-pressed={classId === c.id}
               >
-                {c}
+                <span className="class-teacher-photo">
+                  {c.teacher_photo_url ? <img src={c.teacher_photo_url} alt="" /> : <Mascot size={40} />}
+                </span>
+                <span className="class-card-text">
+                  <span className="class-card-name">{c.name}</span>
+                  <span className="class-card-teacher">{c.teacher_name}</span>
+                </span>
               </button>
             ))}
           </div>

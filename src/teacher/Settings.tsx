@@ -1,9 +1,10 @@
-import { useCallback, useEffect, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { api, type ClassRow, type TeacherSettings } from '../api';
-import { Confirm, Spinner } from '../components/ui';
+import { api, type AdminTeacherRow, type ClassRow, type TeacherSettings } from '../api';
+import { Confirm, Modal, Spinner } from '../components/ui';
 import { CATEGORIES, type Category } from '../lib/sentence';
 import { CAT_META } from '../student/Build';
+import { Avatar, TITLES } from './PinLogin';
 
 function Section({ id, title, children, hint }: { id?: string; title: string; children: ReactNode; hint?: string }) {
   return (
@@ -33,22 +34,24 @@ const CHALLENGE_PRESETS = [
 ];
 
 const TABS = [
-  { key: 'classroom', label: '🏫 Classroom' },
-  { key: 'classes', label: '🔑 Classes & codes' },
+  { key: 'profile', label: '👤 My profile' },
+  { key: 'classes', label: '🔑 My classes' },
   { key: 'words', label: '🧩 Word bank' },
   { key: 'wod', label: '🌟 Word of the Day' },
   { key: 'challenge', label: '🏆 Challenge' },
-  { key: 'pin', label: '🔒 Teacher PIN' },
+  { key: 'pin', label: '🔒 My PIN' },
+  { key: 'school', label: '🏫 School (admin)', admin: true },
 ] as const;
 type TabKey = (typeof TABS)[number]['key'];
 
-export function Settings({ onPinChanged }: { onPinChanged: () => void }) {
+export function Settings({ onChanged }: { onChanged: () => void }) {
   const [s, setS] = useState<TeacherSettings | null>(null);
   const [error, setError] = useState('');
   const [params, setParams] = useSearchParams();
   const fromHash = window.location.hash.replace('#', '');
   const requested = (params.get('tab') || fromHash) as TabKey;
-  const tab: TabKey = TABS.some((t) => t.key === requested) ? requested : 'classroom';
+  const visible = TABS.filter((t) => !('admin' in t) || !!s?.admin);
+  const tab: TabKey = visible.some((t) => t.key === requested) ? requested : 'profile';
 
   const load = useCallback(async () => {
     try {
@@ -70,7 +73,7 @@ export function Settings({ onPinChanged }: { onPinChanged: () => void }) {
     <div className="settings">
       <h1 className="page-title">Settings</h1>
       <div className="sub-tabs" role="tablist" aria-label="Settings sections">
-        {TABS.map((t) => (
+        {visible.map((t) => (
           <button
             key={t.key}
             role="tab"
@@ -83,50 +86,149 @@ export function Settings({ onPinChanged }: { onPinChanged: () => void }) {
         ))}
       </div>
       <div role="tabpanel">
-        {tab === 'classroom' && <ClassroomSection s={s} reload={load} />}
-        {tab === 'classes' && <ClassesSection classes={s.classes} reload={load} />}
+        {tab === 'profile' && <ProfileSection s={s} reload={() => { void load(); onChanged(); }} />}
+        {tab === 'classes' && <ClassesSection s={s} reload={load} />}
         {tab === 'words' && <WordBankSection s={s} reload={load} />}
         {tab === 'wod' && <WordOfDaySection s={s} reload={load} />}
         {tab === 'challenge' && <ChallengeSection s={s} reload={load} />}
-        {tab === 'pin' && <PinSection onChanged={onPinChanged} />}
+        {tab === 'pin' && <PinSection onChanged={onChanged} />}
+        {tab === 'school' && s.admin && <SchoolSection s={s} reload={load} />}
       </div>
     </div>
   );
 }
 
-function ClassroomSection({ s, reload }: { s: TeacherSettings; reload: () => void }) {
-  const [name, setName] = useState(s.classroom_name);
+function ProfileSection({ s, reload }: { s: TeacherSettings; reload: () => void }) {
+  const p = s.profile;
+  const [f, setF] = useState({
+    title: p.title,
+    name: p.name,
+    school: p.school ?? '',
+    subject: p.subject ?? '',
+    welcome_message: p.welcome_message ?? '',
+  });
+  const [busy, setBusy] = useState(false);
   const [flash, show] = useFlash();
-  const save = async (patch: Parameters<typeof api.teacher.updateSettings>[0]) => {
+  const fileRef = useRef<HTMLInputElement>(null);
+  const set = (k: keyof typeof f) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => setF({ ...f, [k]: e.target.value });
+
+  const save = async () => {
+    setBusy(true);
     try {
-      await api.teacher.updateSettings(patch);
-      show('Saved ✓');
+      await api.teacher.updateProfile(f);
+      show('Profile saved ✓');
       reload();
     } catch (e) {
       show((e as Error).message, false);
+    } finally {
+      setBusy(false);
     }
   };
+  const onPhoto = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    setBusy(true);
+    try {
+      await api.teacher.setPhoto(await squarePhotoDataUrl(file, 400));
+      show('Photo updated ✓');
+      reload();
+    } catch (err) {
+      show((err as Error).message, false);
+    } finally {
+      setBusy(false);
+    }
+  };
+  const removePhoto = async () => {
+    await api.teacher.removePhoto();
+    reload();
+  };
+  const preview = `${f.title} ${f.name}`.trim();
+
   return (
-    <Section title="🏫 Classroom">
-      <div className="form-row">
-        <label className="grow">
-          <span className="lbl">Classroom name (shown on the welcome screen and cards)</span>
-          <input className="input" value={name} maxLength={60} onChange={(e) => setName(e.target.value)} />
-        </label>
-        <button className="btn btn-primary" onClick={() => save({ classroom_name: name })} disabled={!name.trim() || name === s.classroom_name}>
-          Save
-        </button>
+    <Section title="👤 My profile" hint="Pupils see your name and photo when they choose their class. Your name, school and subject are printed on your pupils’ cards.">
+      <div className="profile-layout">
+        <div className="profile-photo-col">
+          <Avatar url={p.photo_url} name={p.display_name} size={140} />
+          <button className="btn btn-sky" onClick={() => fileRef.current?.click()} disabled={busy}>
+            📷 {p.photo_url ? 'Change photo' : 'Add photo'}
+          </button>
+          {p.photo_url && (
+            <button className="btn btn-ghost" onClick={removePhoto} disabled={busy}>
+              Remove
+            </button>
+          )}
+          <input ref={fileRef} type="file" accept="image/*" capture="user" hidden onChange={onPhoto} />
+          {p.is_admin && <span className="badge badge-soft">⭐ School admin</span>}
+        </div>
+        <div className="profile-form">
+          <div className="form-grid-2">
+            <label>
+              <span className="lbl">Title</span>
+              <input className="input" list="titles-p" value={f.title} onChange={set('title')} maxLength={20} />
+              <datalist id="titles-p">
+                {TITLES.map((t) => (
+                  <option key={t} value={t} />
+                ))}
+              </datalist>
+            </label>
+            <label>
+              <span className="lbl">Name</span>
+              <input className="input" value={f.name} onChange={set('name')} maxLength={40} />
+            </label>
+            <label>
+              <span className="lbl">School</span>
+              <input className="input" value={f.school} onChange={set('school')} maxLength={80} placeholder="e.g. SK Taman Permata" />
+            </label>
+            <label>
+              <span className="lbl">Subject</span>
+              <input className="input" value={f.subject} onChange={set('subject')} maxLength={40} placeholder="e.g. English" />
+            </label>
+          </div>
+          <label>
+            <span className="lbl">Welcome message for my pupils (shown on the build screen)</span>
+            <textarea
+              className="input textarea"
+              value={f.welcome_message}
+              onChange={set('welcome_message')}
+              maxLength={140}
+              rows={2}
+              placeholder="e.g. Hello 3 Bestari! Let’s build great sentences!"
+            />
+          </label>
+          <p className="muted small">Pupils will see: <strong>{preview || '—'}</strong></p>
+          <button className="btn btn-primary" onClick={save} disabled={busy || !f.name.trim()}>
+            Save profile
+          </button>
+          {flash}
+        </div>
       </div>
-      <label className="toggle">
-        <input type="checkbox" checked={s.photo_required} onChange={(e) => save({ photo_required: e.target.checked })} />
-        <span>Photo is required (turn off to let pupils skip the selfie, e.g. without photo consent)</span>
-      </label>
-      {flash}
     </Section>
   );
 }
 
-function ClassesSection({ classes, reload }: { classes: ClassRow[]; reload: () => void }) {
+/** Centre-crop an image file to a square JPEG data URL. */
+async function squarePhotoDataUrl(file: File, size: number): Promise<string> {
+  const url = URL.createObjectURL(file);
+  try {
+    const img = await new Promise<HTMLImageElement>((res, rej) => {
+      const i = new Image();
+      i.onload = () => res(i);
+      i.onerror = () => rej(new Error('That file is not a photo.'));
+      i.src = url;
+    });
+    const side = Math.min(img.naturalWidth, img.naturalHeight);
+    const c = document.createElement('canvas');
+    c.width = c.height = Math.min(size, side);
+    c.getContext('2d')!.drawImage(img, (img.naturalWidth - side) / 2, (img.naturalHeight - side) / 2, side, side, 0, 0, c.width, c.height);
+    return c.toDataURL('image/jpeg', 0.85);
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
+
+function ClassesSection({ s, reload }: { s: TeacherSettings; reload: () => void }) {
+  const classes: ClassRow[] = s.classes;
   const [name, setName] = useState('');
   const [code, setCode] = useState('');
   const [edit, setEdit] = useState<ClassRow | null>(null);
@@ -148,7 +250,7 @@ function ClassesSection({ classes, reload }: { classes: ClassRow[]; reload: () =
     return Array.from(crypto.getRandomValues(new Uint8Array(6)), (b) => chars[b % chars.length]).join('');
   };
   return (
-    <Section title="🔑 Classes & access codes" hint="Pupils pick their class and type its code. Give the code to your pupils (or type it in for them).">
+    <Section title="🔑 My classes & access codes" hint="Pupils pick your class (they see your name next to it) and type its code. Only you can see these classes and their pupils’ work.">
       <ul className="class-list">
         {classes.map((c) =>
           edit?.id === c.id ? (
@@ -202,6 +304,16 @@ function ClassesSection({ classes, reload }: { classes: ClassRow[]; reload: () =
           + Add class
         </button>
       </div>
+      <label className="toggle">
+        <input
+          type="checkbox"
+          checked={s.photo_required}
+          onChange={async (e) => {
+            await run(() => api.teacher.updateSettings({ photo_required: e.target.checked }), 'Saved ✓');
+          }}
+        />
+        <span>Photo is required for my pupils (turn off to let them skip the selfie, e.g. without photo consent)</span>
+      </label>
       {flash}
       {del && (
         <Confirm
@@ -430,7 +542,7 @@ function PinSection({ onChanged }: { onChanged: () => void }) {
     </label>
   );
   return (
-    <Section id="pin" title="🔒 Change teacher PIN" hint="4 to 8 digits. The PIN is checked on the server and stored only as a secure hash.">
+    <Section id="pin" title="🔒 Change my PIN" hint="4 to 8 digits. The PIN is checked on the server and stored only as a secure hash.">
       <div className="form-row">
         {pinInput(cur, setCur, 'Current PIN')}
         {pinInput(next, setNext, 'New PIN')}
@@ -442,5 +554,154 @@ function PinSection({ onChanged }: { onChanged: () => void }) {
       {next && again && next !== again && <p className="warn-text">The new PINs don't match.</p>}
       {flash}
     </Section>
+  );
+}
+
+function SchoolSection({ s, reload }: { s: TeacherSettings; reload: () => void }) {
+  const a = s.admin!;
+  const [name, setName] = useState(s.school_name);
+  const [code, setCode] = useState(a.registration_code ?? '');
+  const [resetFor, setResetFor] = useState<AdminTeacherRow | null>(null);
+  const [newPin, setNewPin] = useState('');
+  const [removeFor, setRemoveFor] = useState<AdminTeacherRow | null>(null);
+  const [flash, show] = useFlash();
+  const run = async (fn: () => Promise<void>, ok: string) => {
+    try {
+      await fn();
+      show(ok);
+      reload();
+    } catch (e) {
+      show((e as Error).message, false);
+    }
+  };
+  const gen = () => {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    return Array.from(crypto.getRandomValues(new Uint8Array(8)), (b) => chars[b % chars.length]).join('');
+  };
+  return (
+    <>
+      <Section title="🏫 School" hint="Only school admins see this tab.">
+        <div className="form-row">
+          <label className="grow">
+            <span className="lbl">School / site name (shown on the welcome screen)</span>
+            <input className="input" value={name} maxLength={60} onChange={(e) => setName(e.target.value)} />
+          </label>
+          <button className="btn btn-primary" disabled={!name.trim() || name === s.school_name} onClick={() => run(() => api.teacher.schoolUpdate({ school_name: name }), 'Saved ✓')}>
+            Save
+          </button>
+        </div>
+        <div className="form-row">
+          <label className="grow">
+            <span className="lbl">School code — teachers need this to sign up</span>
+            <input className="input code" value={code} maxLength={30} onChange={(e) => setCode(e.target.value.toUpperCase().replace(/\s/g, ''))} placeholder="at least 6 letters/numbers" />
+          </label>
+          <button className="btn btn-ghost" onClick={() => setCode(gen())}>
+            🎲 Make code
+          </button>
+          <button
+            className="btn btn-primary"
+            disabled={code.length < 6 || code === (a.registration_code ?? '')}
+            onClick={() => run(() => api.teacher.schoolUpdate({ registration_code: code }), 'School code saved ✓')}
+          >
+            Save code
+          </button>
+        </div>
+        {!a.registration_code && (
+          <p className="warn-text">No school code set yet — new teachers currently sign up with the setup code (INITIAL_TEACHER_PIN). Set your own code above.</p>
+        )}
+        {flash}
+      </Section>
+      <Section title={`🧑‍🏫 Teachers (${a.teachers.length})`} hint="Each teacher has their own classes, pupils, word bank and cards. Removing a teacher permanently deletes all of their pupils’ work.">
+        <div className="table-wrap">
+          <table className="sub-table">
+            <thead>
+              <tr>
+                <th>Teacher</th>
+                <th>Subject</th>
+                <th>Classes</th>
+                <th>Role</th>
+                <th />
+              </tr>
+            </thead>
+            <tbody>
+              {a.teachers.map((t) => (
+                <tr key={t.id} style={{ cursor: 'default' }}>
+                  <td className="strong">
+                    {t.display_name}
+                    {t.id === s.profile.id && <span className="muted"> (you)</span>}
+                  </td>
+                  <td>{t.subject ?? '—'}</td>
+                  <td>{t.class_count}</td>
+                  <td>{t.is_admin ? <span className="badge badge-soft">Admin</span> : 'Teacher'}</td>
+                  <td>
+                    <div className="row gap wrap">
+                      <button className="btn btn-ghost btn-sm" onClick={() => { setResetFor(t); setNewPin(''); }}>
+                        🔑 Reset PIN
+                      </button>
+                      {t.id !== s.profile.id && (
+                        <button className="btn btn-ghost btn-sm" onClick={() => run(() => api.teacher.setAdmin(t.id, !t.is_admin), t.is_admin ? 'Admin removed' : 'Made admin ✓')}>
+                          {t.is_admin ? 'Remove admin' : '⭐ Make admin'}
+                        </button>
+                      )}
+                      {t.id !== s.profile.id && (
+                        <button className="btn btn-ghost btn-sm danger-text" onClick={() => setRemoveFor(t)}>
+                          🗑️ Remove
+                        </button>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </Section>
+      {resetFor && (
+        <Modal onClose={() => setResetFor(null)}>
+          <h2 className="modal-title">Reset PIN for {resetFor.display_name}</h2>
+          <p className="modal-text">Tell them the new PIN; they can change it in Settings → My PIN.</p>
+          <input
+            className="pin-display"
+            type="password"
+            inputMode="numeric"
+            value={newPin}
+            onChange={(e) => setNewPin(e.target.value.replace(/\D/g, '').slice(0, 8))}
+            placeholder="New PIN"
+            aria-label="New PIN"
+            autoFocus
+          />
+          <div className="row gap center">
+            <button className="btn btn-ghost" onClick={() => setResetFor(null)}>
+              Cancel
+            </button>
+            <button
+              className="btn btn-primary"
+              disabled={!/^\d{4,8}$/.test(newPin)}
+              onClick={() => {
+                const t = resetFor;
+                setResetFor(null);
+                void run(() => api.teacher.resetTeacherPin(t.id, newPin), `PIN reset for ${t.display_name} ✓`);
+              }}
+            >
+              Reset PIN
+            </button>
+          </div>
+        </Modal>
+      )}
+      {removeFor && (
+        <Confirm
+          title={`Remove ${removeFor.display_name}?`}
+          message="This permanently deletes their account, classes, word bank and ALL their pupils’ photos and recordings. Printed QR codes for their pupils will stop working."
+          yes="Remove teacher"
+          danger
+          onYes={() => {
+            const t = removeFor;
+            setRemoveFor(null);
+            void run(() => api.teacher.removeTeacher(t.id), `${t.display_name} removed`);
+          }}
+          onNo={() => setRemoveFor(null)}
+        />
+      )}
+    </>
   );
 }

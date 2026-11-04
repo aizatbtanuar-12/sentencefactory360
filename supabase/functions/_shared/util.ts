@@ -135,7 +135,7 @@ function sessionSecret(): string {
 }
 
 export interface SessionPayload {
-  sub: 'teacher';
+  sub: string; // teacher id
   exp: number; // unix seconds
   pv: string; // fingerprint of the PIN hash — changing the PIN signs everyone out
 }
@@ -152,7 +152,7 @@ export async function readSession(token: string | null): Promise<SessionPayload 
   if (!safeEqual(sig, await hmac(sessionSecret(), body))) return null;
   try {
     const p = JSON.parse(new TextDecoder().decode(fromB64url(body))) as SessionPayload;
-    if (p.sub !== 'teacher' || typeof p.exp !== 'number' || p.exp < Date.now() / 1000) return null;
+    if (typeof p.sub !== 'string' || !p.sub || typeof p.exp !== 'number' || p.exp < Date.now() / 1000) return null;
     return p;
   } catch {
     return null;
@@ -175,4 +175,50 @@ export function clientIp(req: Request): string {
 
 export function str(v: unknown, max = 200): string {
   return typeof v === 'string' ? v.replace(/[<>]/g, '').replace(/\s+/g, ' ').trim().slice(0, max) : '';
+}
+
+export const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+export interface TeacherRow {
+  id: string;
+  title: string;
+  name: string;
+  school: string | null;
+  subject: string | null;
+  welcome_message: string | null;
+  photo_path: string | null;
+  pin_hash: string | null;
+  is_admin: boolean;
+  photo_required: boolean;
+  word_of_day: unknown;
+  challenge: unknown;
+  created_at: string;
+}
+
+export const displayName = (t: { title: string; name: string }) => `${t.title} ${t.name}`.trim();
+
+/** Short-lived signed URLs for a set of storage paths (missing paths are skipped). */
+export async function signUrls(paths: (string | null | undefined)[], seconds = 3600): Promise<Map<string, string>> {
+  const list = [...new Set(paths.filter((p): p is string => !!p))];
+  const map = new Map<string, string>();
+  if (!list.length) return map;
+  const { data, error } = await admin().storage.from(BUCKET).createSignedUrls(list, seconds);
+  if (error) console.error(error);
+  for (const d of data ?? []) if (d.path && d.signedUrl) map.set(d.path, d.signedUrl);
+  return map;
+}
+
+/** Public-safe view of a teacher (never includes the PIN hash). */
+export function publicTeacher(t: TeacherRow, urls: Map<string, string>) {
+  return {
+    id: t.id,
+    title: t.title,
+    name: t.name,
+    display_name: displayName(t),
+    school: t.school,
+    subject: t.subject,
+    welcome_message: t.welcome_message,
+    photo_url: t.photo_path ? urls.get(t.photo_path) ?? null : null,
+    is_admin: t.is_admin,
+  };
 }

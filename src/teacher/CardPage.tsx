@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
-import { api, type Submission } from '../api';
+import { api, type Submission, type TeacherProfile } from '../api';
 import { SentenceCard } from '../components/SentenceCard';
 import { Spinner } from '../components/ui';
 import { cardsToPdf } from '../lib/pdf';
@@ -12,7 +12,7 @@ export function CardPage() {
   const cls = params.get('class') ?? '';
   const [cards, setCards] = useState<Submission[] | null>(null);
   const [qrs, setQrs] = useState<Record<string, string>>({});
-  const [classroom, setClassroom] = useState('');
+  const [teacher, setTeacher] = useState<TeacherProfile | null>(null);
   const [error, setError] = useState('');
   const [pdfBusy, setPdfBusy] = useState(false);
   const [imagesReady, setImagesReady] = useState(false);
@@ -25,7 +25,7 @@ export function CardPage() {
           api.teacher.cards(id ? { ids: [id] } : { class_name: cls }),
           api.teacher.getSettings(),
         ]);
-        setClassroom(settings.classroom_name);
+        setTeacher(settings.profile);
         if (id && list.length === 0) throw new Error('This submission is not approved yet, so it cannot be printed.');
         const q: Record<string, string> = {};
         await Promise.all(list.map(async (s) => s.share_token && (q[s.id] = await qrDataUrl(shareUrl(s.share_token)))));
@@ -85,7 +85,7 @@ export function CardPage() {
       {!cards && !error && <Spinner label="Preparing cards…" />}
       {cards && cards.length === 0 && <p className="muted">No approved sentences to print yet.</p>}
       <div className="card-sheet" ref={sheet}>
-        {cards?.map((s) => <SentenceCard key={s.id} s={s} qr={qrs[s.id] ?? null} classroomName={classroom} />)}
+        {cards?.map((s) => <SentenceCard key={s.id} s={s} qr={qrs[s.id] ?? null} teacher={teacher} />)}
       </div>
     </div>
   );

@@ -1,10 +1,11 @@
 import { useState } from 'react';
-import type { Submission } from '../api';
+import type { Submission, TeacherPublic } from '../api';
 import { ColourSentence } from './ui';
 import { Mascot } from './Mascot';
 
 /** A6 portrait learning card (105 × 148 mm). Sized in mm so print matches exactly. */
-export function SentenceCard({ s, qr, classroomName }: { s: Submission; qr: string | null; classroomName?: string }) {
+export function SentenceCard({ s, qr, teacher }: { s: Submission; qr: string | null; teacher?: TeacherPublic | null }) {
+  const teacherLine = teacher ? [teacher.school, teacher.subject].filter(Boolean).join(' · ') : '';
   const len = s.sentence.length;
   const size = len <= 45 ? 17 : len <= 60 ? 15.5 : len <= 75 ? 14 : 12.5;
   return (
@@ -39,7 +40,15 @@ export function SentenceCard({ s, qr, classroomName }: { s: Submission; qr: stri
         <div className="a6-bottom-text">
           <div className="a6-scan">📱 SCAN TO HEAR ME READ</div>
           <div className="a6-growing">“My English is growing every day!” 🌱</div>
-          {classroomName && <div className="a6-classroom">{classroomName}</div>}
+          {teacher && (
+            <div className="a6-teacher">
+              {teacher.photo_url && <CardPhoto src={teacher.photo_url} className="a6-teacher-photo" />}
+              <div>
+                <div className="a6-teacher-name">{teacher.display_name}</div>
+                {teacherLine && <div className="a6-classroom">{teacherLine}</div>}
+              </div>
+            </div>
+          )}
         </div>
       </footer>
     </article>
@@ -47,7 +56,9 @@ export function SentenceCard({ s, qr, classroomName }: { s: Submission; qr: stri
 }
 
 /** Loads the photo with CORS (so the PDF export can read it); falls back to a plain load if the server refuses. */
-function CardPhoto({ src }: { src: string }) {
+function CardPhoto({ src, className }: { src: string; className?: string }) {
   const [cors, setCors] = useState(true);
-  return <img key={String(cors)} src={src} alt="" crossOrigin={cors ? 'anonymous' : undefined} onError={() => cors && setCors(false)} />;
+  return (
+    <img key={String(cors)} className={className} src={src} alt="" crossOrigin={cors ? 'anonymous' : undefined} onError={() => cors && setCors(false)} />
+  );
 }

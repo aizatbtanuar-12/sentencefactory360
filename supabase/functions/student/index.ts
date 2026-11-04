@@ -1,6 +1,20 @@
-// Student endpoint: public config, access-code check and submission upload.
-// Students never get read access to anyone's submissions.
-import { admin, BUCKET, HttpError, json, must, safeEqual, serve, str } from '../_shared/util.ts';
+// Student endpoint: class list, access-code check (returns that teacher's word bank)
+// and submission upload. Students never get read access to anyone's submissions.
+import {
+  admin,
+  BUCKET,
+  displayName,
+  HttpError,
+  json,
+  must,
+  publicTeacher,
+  safeEqual,
+  serve,
+  signUrls,
+  str,
+  UUID_RE,
+  type TeacherRow,
+} from '../_shared/util.ts';
 import {
   buildSentence,
   challengeMet,
@@ -14,32 +28,37 @@ import {
 
 const MAX_PHOTO = 3 * 1024 * 1024;
 const MAX_AUDIO = 6 * 1024 * 1024;
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-async function loadConfig() {
-  const db = admin();
-  const settings = must(
-    await db.from('app_settings').select('classroom_name, photo_required, word_of_day, challenge').eq('id', 1).single(),
-  ) as { classroom_name: string; photo_required: boolean; word_of_day: WordOfDay | null; challenge: Challenge | null };
-  const classes = must(await db.from('classes').select('name').order('name')) as { name: string }[];
-  const words = must(
-    await db.from('word_bank').select('id, category, text, is_plural, sort_order').order('sort_order').order('text'),
-  ) as WordItem[];
-  return { settings, classes, words };
+interface ClassRow {
+  id: string;
+  name: string;
+  access_code: string;
+  teacher_id: string | null;
 }
 
-async function checkCode(className: string, code: string) {
+/** Check a class's access code; returns the class and its teacher. */
+async function checkCode(classId: string, code: string) {
+  if (!UUID_RE.test(classId)) throw new HttpError(400, 'Please choose your class.');
   const db = admin();
-  const rows = must(await db.from('classes').select('id, name, access_code').ilike('name', className)) as {
-    id: string;
-    name: string;
-    access_code: string;
-  }[];
-  const cls = rows.find((r) => r.name.toLowerCase() === className.toLowerCase());
-  if (!cls || !safeEqual(cls.access_code.toUpperCase(), code.trim().toUpperCase())) {
+  const cls = must(await db.from('classes').select('id, name, access_code, teacher_id').eq('id', classId).maybeSingle()) as
+    | ClassRow
+    | null;
+  if (!cls || !cls.teacher_id || !safeEqual(cls.access_code.toUpperCase(), code.trim().toUpperCase())) {
     throw new HttpError(401, 'That classroom code is not right. Ask your teacher for help.');
   }
-  return cls;
+  const teacher = must(await db.from('teachers').select('*').eq('id', cls.teacher_id).single()) as TeacherRow;
+  return { cls, teacher };
+}
+
+async function teacherWords(teacherId: string): Promise<WordItem[]> {
+  return must(
+    await admin()
+      .from('word_bank')
+      .select('id, category, text, is_plural, sort_order')
+      .eq('teacher_id', teacherId)
+      .order('sort_order')
+      .order('text'),
+  ) as WordItem[];
 }
 
 function extFor(mime: string): string {
@@ -59,7 +78,7 @@ serve(async (req) => {
     const form = await req.formData();
     const id = str(form.get('id'), 36);
     const pupil = cleanName(str(form.get('pupil_name'), 40));
-    const className = str(form.get('class_name'), 40);
+    const classId = str(form.get('class_id'), 36);
     const code = str(form.get('access_code'), 20);
     const who = str(form.get('who'), 60);
     let what = str(form.get('what'), 60);
@@ -71,14 +90,14 @@ serve(async (req) => {
 
     if (!UUID_RE.test(id)) throw new HttpError(400, 'Invalid submission id.');
     if (!pupil) throw new HttpError(400, 'Please type your name.');
-    const cls = await checkCode(className, code);
+    const { cls, teacher } = await checkCode(classId, code);
 
     const db = admin();
     // Idempotency: a double tap or a retry after a dropped connection must not create a duplicate.
     const existing = must(await db.from('submissions').select('id').eq('id', id).maybeSingle());
     if (existing) return json(req, { ok: true, id, duplicate: true });
 
-    const { settings, words } = await loadConfig();
+    const words = await teacherWords(teacher.id);
     const pick = (cat: string, text: string) =>
       words.find((w) => w.category === cat && w.text.toLowerCase() === text.toLowerCase());
     const whoItem = pick('who', who);
@@ -105,7 +124,7 @@ serve(async (req) => {
       if (photo.size > MAX_PHOTO) throw new HttpError(413, 'The photo is too big. Please take it again.');
       if (!/^image\/(jpeg|png|webp)$/.test(photo.type)) throw new HttpError(400, 'That file is not a photo.');
       photoPath = `photos/${id}.${photo.type === 'image/png' ? 'png' : photo.type === 'image/webp' ? 'webp' : 'jpg'}`;
-    } else if (settings.photo_required) {
+    } else if (teacher.photo_required) {
       throw new HttpError(400, 'Please take your photo first.');
     }
 
@@ -118,12 +137,14 @@ serve(async (req) => {
     const upA = await store.upload(audioPath, audio, { contentType: audioMime, upsert: true });
     if (upA.error) throw new HttpError(500, 'Could not save the recording. Please try again.');
 
+    const wod = teacher.word_of_day as WordOfDay | null;
     const sentence = buildSentence({ who: whoItem.text, what, where: whereItem.text, when: whenItem.text });
     const ins = await db.from('submissions').insert({
       id,
       pupil_name: pupil,
       class_name: cls.name,
       class_id: cls.id,
+      teacher_id: teacher.id,
       sentence,
       who: whoItem.text,
       what_happens: what,
@@ -133,35 +154,62 @@ serve(async (req) => {
       audio_path: audioPath,
       audio_mime: audioMime,
       audio_duration_ms: duration,
-      challenge_done: challengeMet(sentence, settings.challenge),
-      used_word_of_day: !!settings.word_of_day?.word && containsWord(sentence, settings.word_of_day.word),
+      challenge_done: challengeMet(sentence, teacher.challenge as Challenge | null),
+      used_word_of_day: !!wod?.word && containsWord(sentence, wod.word),
     });
     if (ins.error && ins.error.code !== '23505') {
       console.error(ins.error);
       throw new HttpError(500, 'Could not save your sentence. Please try again.');
     }
-    return json(req, { ok: true, id });
+    return json(req, { ok: true, id, teacher_name: displayName(teacher) });
   }
 
   // ---------- JSON actions ----------
   const body = req.method === 'POST' ? await req.json().catch(() => ({})) : {};
-  const action = str(body.action, 20) || 'config';
+  const action = str(body.action, 20) || 'classes';
+  const db = admin();
 
-  if (action === 'config') {
-    const { settings, classes, words } = await loadConfig();
+  if (action === 'classes' || action === 'config') {
+    const settings = must(await db.from('app_settings').select('classroom_name').eq('id', 1).single()) as {
+      classroom_name: string;
+    };
+    const classes = must(await db.from('classes').select('id, name, teacher_id').not('teacher_id', 'is', null).order('name')) as {
+      id: string;
+      name: string;
+      teacher_id: string;
+    }[];
+    const teachers = must(
+      await db.from('teachers').select('id, title, name, photo_path').in('id', [...new Set(classes.map((c) => c.teacher_id))]),
+    ) as Pick<TeacherRow, 'id' | 'title' | 'name' | 'photo_path'>[];
+    const urls = await signUrls(teachers.map((t) => t.photo_path));
+    const byId = new Map(teachers.map((t) => [t.id, t]));
     return json(req, {
-      classroom_name: settings.classroom_name,
-      photo_required: settings.photo_required,
-      word_of_day: settings.word_of_day,
-      challenge: settings.challenge,
-      classes: classes.map((c) => c.name),
-      words,
+      school_name: settings.classroom_name,
+      classes: classes.map((c) => {
+        const t = byId.get(c.teacher_id);
+        return {
+          id: c.id,
+          name: c.name,
+          teacher_name: t ? displayName(t) : '',
+          teacher_photo_url: t?.photo_path ? urls.get(t.photo_path) ?? null : null,
+        };
+      }),
     });
   }
 
   if (action === 'verify') {
-    const cls = await checkCode(str(body.class_name, 40), str(body.access_code, 20));
-    return json(req, { ok: true, class_name: cls.name });
+    const { cls, teacher } = await checkCode(str(body.class_id, 36), str(body.access_code, 20));
+    const urls = await signUrls([teacher.photo_path]);
+    const t = publicTeacher(teacher, urls);
+    return json(req, {
+      class_id: cls.id,
+      class_name: cls.name,
+      teacher: { ...t, is_admin: undefined },
+      photo_required: teacher.photo_required,
+      word_of_day: teacher.word_of_day,
+      challenge: teacher.challenge,
+      words: await teacherWords(teacher.id),
+    });
   }
 
   throw new HttpError(400, 'Unknown action.');
