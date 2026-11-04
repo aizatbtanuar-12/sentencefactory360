@@ -64,7 +64,7 @@ export default function TeacherApp() {
       </header>
       {initialPin && (
         <div className="warn-banner no-print">
-          ⚠️ You are still using the first-time PIN. Please <NavLink to="/teacher/settings#pin">set your own PIN</NavLink>.
+          ⚠️ You are still using the first-time PIN. Please <NavLink to="/teacher/settings?tab=pin">set your own PIN</NavLink>.
         </div>
       )}
       <main className="teacher-main">

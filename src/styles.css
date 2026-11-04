@@ -1952,3 +1952,44 @@ img {
   z-index: 0;
   opacity: 0.75;
 }
+
+/* settings sub-tabs */
+.sub-tabs {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  background: #fff;
+  border-radius: 20px;
+  padding: 6px;
+  box-shadow: var(--shadow-sm);
+  margin-bottom: 16px;
+  position: sticky;
+  top: 74px;
+  z-index: 15;
+}
+.sub-tabs button {
+  border: 0;
+  background: transparent;
+  border-radius: 14px;
+  padding: 10px 16px;
+  min-height: 46px;
+  font-weight: 800;
+  color: var(--ink);
+}
+.sub-tabs button:hover {
+  background: var(--sky-soft);
+}
+.sub-tabs button.active {
+  background: var(--royal);
+  color: #fff;
+}
+@media (max-width: 860px) {
+  .sub-tabs {
+    position: static;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+  }
+  .sub-tabs button {
+    white-space: nowrap;
+  }
+}

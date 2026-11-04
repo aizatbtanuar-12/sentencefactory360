@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { api, type ClassRow, type TeacherSettings } from '../api';
 import { Confirm, Spinner } from '../components/ui';
 import { CATEGORIES, type Category } from '../lib/sentence';
@@ -31,9 +32,23 @@ const CHALLENGE_PRESETS = [
   { title: 'Build a longer sentence (10 words or more)', required_word: '', min_words: 10 },
 ];
 
+const TABS = [
+  { key: 'classroom', label: '🏫 Classroom' },
+  { key: 'classes', label: '🔑 Classes & codes' },
+  { key: 'words', label: '🧩 Word bank' },
+  { key: 'wod', label: '🌟 Word of the Day' },
+  { key: 'challenge', label: '🏆 Challenge' },
+  { key: 'pin', label: '🔒 Teacher PIN' },
+] as const;
+type TabKey = (typeof TABS)[number]['key'];
+
 export function Settings({ onPinChanged }: { onPinChanged: () => void }) {
   const [s, setS] = useState<TeacherSettings | null>(null);
   const [error, setError] = useState('');
+  const [params, setParams] = useSearchParams();
+  const fromHash = window.location.hash.replace('#', '');
+  const requested = (params.get('tab') || fromHash) as TabKey;
+  const tab: TabKey = TABS.some((t) => t.key === requested) ? requested : 'classroom';
 
   const load = useCallback(async () => {
     try {
@@ -46,9 +61,7 @@ export function Settings({ onPinChanged }: { onPinChanged: () => void }) {
     void load();
   }, [load]);
 
-  useEffect(() => {
-    if (s && window.location.hash) document.querySelector(window.location.hash)?.scrollIntoView({ behavior: 'smooth' });
-  }, [s]);
+  const choose = (k: TabKey) => setParams({ tab: k }, { replace: true });
 
   if (error) return <p className="error-msg">{error}</p>;
   if (!s) return <Spinner />;
@@ -56,12 +69,27 @@ export function Settings({ onPinChanged }: { onPinChanged: () => void }) {
   return (
     <div className="settings">
       <h1 className="page-title">Settings</h1>
-      <ClassroomSection s={s} reload={load} />
-      <ClassesSection classes={s.classes} reload={load} />
-      <WordBankSection s={s} reload={load} />
-      <WordOfDaySection s={s} reload={load} />
-      <ChallengeSection s={s} reload={load} />
-      <PinSection onChanged={onPinChanged} />
+      <div className="sub-tabs" role="tablist" aria-label="Settings sections">
+        {TABS.map((t) => (
+          <button
+            key={t.key}
+            role="tab"
+            aria-selected={tab === t.key}
+            className={tab === t.key ? 'active' : ''}
+            onClick={() => choose(t.key)}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+      <div role="tabpanel">
+        {tab === 'classroom' && <ClassroomSection s={s} reload={load} />}
+        {tab === 'classes' && <ClassesSection classes={s.classes} reload={load} />}
+        {tab === 'words' && <WordBankSection s={s} reload={load} />}
+        {tab === 'wod' && <WordOfDaySection s={s} reload={load} />}
+        {tab === 'challenge' && <ChallengeSection s={s} reload={load} />}
+        {tab === 'pin' && <PinSection onChanged={onPinChanged} />}
+      </div>
     </div>
   );
 }
