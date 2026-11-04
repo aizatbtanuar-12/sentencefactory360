@@ -5,3 +5,4 @@ dist
 supabase/functions/.env
 supabase/.temp
 e2e-shots
+*.tsbuildinfo
