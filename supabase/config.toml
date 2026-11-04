@@ -1,0 +1,15 @@
+# Minimal Supabase CLI config for Sentence Factory 360°.
+# Run `supabase init` first if you want the full local-dev config; keep these [functions.*] blocks.
+project_id = "sentence-factory-360"
+
+# The functions do their own checks (classroom access code / teacher PIN session),
+# so the gateway JWT check is switched off. This also lets the newer
+# "publishable" API keys work, which are not JWTs.
+[functions.student]
+verify_jwt = false
+
+[functions.teacher]
+verify_jwt = false
+
+[functions.listen]
+verify_jwt = false

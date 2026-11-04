@@ -1,0 +1,223 @@
+/* =====================================================================
+   A6 portrait printable sentence card — 105 mm × 148 mm
+   ===================================================================== */
+.card-sheet {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 24px;
+  justify-content: center;
+  padding: 10px 0 30px;
+}
+.a6-card {
+  width: 105mm;
+  height: 148mm;
+  background: #fff;
+  border-radius: 5mm;
+  box-shadow: 0 10px 30px rgba(49, 91, 145, 0.18);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  font-family: 'Nunito', system-ui, sans-serif;
+  color: #1f3b63;
+  position: relative;
+  border: 1.2mm solid #70b6ed;
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+.a6-top {
+  background: #315b91;
+  color: #fff;
+  padding: 3.2mm 4mm 3mm;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 2mm;
+  background-image: radial-gradient(circle at 92% 10%, rgba(112, 182, 237, 0.6) 0 9mm, transparent 9.2mm);
+}
+.a6-title {
+  font-family: 'Baloo 2', sans-serif;
+  font-weight: 800;
+  font-size: 13.5pt;
+  line-height: 1;
+  letter-spacing: 0.02em;
+}
+.a6-tag {
+  font-weight: 800;
+  font-size: 6.8pt;
+  letter-spacing: 0.12em;
+  color: #ffd2bf;
+  margin-top: 0.8mm;
+}
+.a6-who {
+  display: flex;
+  align-items: center;
+  gap: 4mm;
+  padding: 4mm 5mm 2mm;
+  background: #fff6e4;
+}
+.a6-photo {
+  width: 36mm;
+  height: 36mm;
+  border-radius: 6mm;
+  overflow: hidden;
+  flex: 0 0 auto;
+  background: #e4f2fd;
+  display: grid;
+  place-items: center;
+  border: 1.2mm solid #fff;
+  box-shadow: 0 0 0 0.6mm #ed8a62;
+}
+.a6-photo img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.a6-name-block {
+  min-width: 0;
+}
+.a6-name {
+  font-family: 'Baloo 2', sans-serif;
+  font-weight: 800;
+  font-size: 18pt;
+  line-height: 1.05;
+  color: #315b91;
+  word-break: break-word;
+}
+.a6-class {
+  display: inline-block;
+  margin-top: 1.5mm;
+  background: #f2efff;
+  color: #7461d6;
+  font-weight: 800;
+  font-size: 9pt;
+  border-radius: 4mm;
+  padding: 0.6mm 3mm;
+}
+.a6-sentence-box {
+  flex: 1;
+  margin: 3mm 5mm 0;
+  border: 0.7mm dashed #70b6ed;
+  border-radius: 5mm;
+  padding: 3mm 3.5mm;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  background: #fff;
+  position: relative;
+}
+.a6-label {
+  position: absolute;
+  top: -2.6mm;
+  left: 4mm;
+  background: #ed8a62;
+  color: #fff;
+  font-family: 'Baloo 2', sans-serif;
+  font-weight: 800;
+  font-size: 8pt;
+  letter-spacing: 0.12em;
+  padding: 0.3mm 3mm;
+  border-radius: 3mm;
+}
+.a6-sentence {
+  font-family: 'Baloo 2', sans-serif;
+  font-weight: 700;
+  line-height: 1.5;
+  margin: 0;
+  text-align: center;
+}
+.a6-sentence .seg {
+  border-radius: 1.6mm;
+  padding: 0 1.2mm;
+}
+.a6-bottom {
+  display: flex;
+  align-items: center;
+  gap: 3mm;
+  padding: 3mm 5mm 4mm;
+}
+.a6-qr {
+  width: 23mm;
+  height: 23mm;
+  flex: 0 0 auto;
+  border-radius: 2.5mm;
+  border: 0.6mm solid #e2e8f2;
+  padding: 0.8mm;
+  background: #fff;
+}
+.a6-qr img {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+.a6-qr-missing {
+  width: 100%;
+  height: 100%;
+  display: grid;
+  place-items: center;
+  color: #b8c3d3;
+}
+.a6-scan {
+  font-family: 'Baloo 2', sans-serif;
+  font-weight: 800;
+  font-size: 10.5pt;
+  color: #ed8a62;
+  line-height: 1.1;
+}
+.a6-growing {
+  font-weight: 800;
+  font-size: 8.5pt;
+  color: #2e9d62;
+  margin-top: 1mm;
+}
+.a6-classroom {
+  font-size: 7pt;
+  color: #6b7a90;
+  margin-top: 1mm;
+  font-weight: 700;
+}
+
+/* ---------------------------------------------------------------- print */
+@page {
+  size: 105mm 148mm;
+  margin: 0;
+}
+@media print {
+  html,
+  body {
+    background: #fff !important;
+    margin: 0 !important;
+  }
+  .no-print,
+  .offline-banner,
+  .warn-banner {
+    display: none !important;
+  }
+  .teacher-shell,
+  .teacher-main,
+  .card-page {
+    padding: 0 !important;
+    margin: 0 !important;
+    max-width: none !important;
+    background: #fff !important;
+  }
+  .card-sheet {
+    display: block;
+    padding: 0;
+  }
+  .a6-card {
+    box-shadow: none;
+    border-radius: 0;
+    margin: 0;
+    page-break-after: always;
+    break-after: page;
+    page-break-inside: avoid;
+  }
+  .a6-card:last-child {
+    page-break-after: auto;
+    break-after: auto;
+  }
+  .mascot * {
+    animation: none !important;
+  }
+}
