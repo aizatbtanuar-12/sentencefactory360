@@ -1,0 +1,229 @@
+// =====================================================================
+//  Sentence Factory 360° — Edge Function "listen" (single-file version)
+//  For pasting into Supabase Dashboard → Edge Functions → Deploy a new
+//  function → Via Editor. Name the function exactly:  listen
+//  Then turn OFF "Enforce JWT verification" for it.
+//  (Generated from supabase/functions/listen/index.ts + _shared/*.ts)
+// =====================================================================
+
+// ---------- shared: util.ts ----------
+// Shared server helpers for the Sentence Factory Edge Functions.
+import { createClient, type SupabaseClient } from 'npm:@supabase/supabase-js@2';
+
+const BUCKET = 'submissions';
+
+// ---------------------------------------------------------------- CORS
+function corsHeaders(req: Request): Record<string, string> {
+  const allowed = (Deno.env.get('ALLOWED_ORIGINS') ?? '')
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
+  const origin = req.headers.get('origin') ?? '';
+  const allowOrigin = allowed.length === 0 ? '*' : allowed.includes(origin) ? origin : allowed[0];
+  return {
+    'Access-Control-Allow-Origin': allowOrigin,
+    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-teacher-token',
+    'Access-Control-Allow-Methods': 'POST, GET, OPTIONS',
+    Vary: 'Origin',
+  };
+}
+
+function json(req: Request, body: unknown, status = 200): Response {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { ...corsHeaders(req), 'Content-Type': 'application/json', 'Cache-Control': 'no-store' },
+  });
+}
+
+class HttpError extends Error {
+  constructor(public status: number, message: string) {
+    super(message);
+  }
+}
+
+function serve(handler: (req: Request) => Promise<Response>) {
+  Deno.serve(async (req) => {
+    if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders(req) });
+    try {
+      return await handler(req);
+    } catch (e) {
+      if (e instanceof HttpError) return json(req, { error: e.message }, e.status);
+      console.error(e);
+      return json(req, { error: 'Something went wrong on the server. Please try again.' }, 500);
+    }
+  });
+}
+
+// ---------------------------------------------------------------- Supabase admin client (server only)
+let _admin: SupabaseClient | null = null;
+function admin(): SupabaseClient {
+  if (!_admin) {
+    const url = Deno.env.get('SUPABASE_URL');
+    const key = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+    if (!url || !key) throw new HttpError(500, 'Server is missing Supabase configuration.');
+    _admin = createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
+  }
+  return _admin;
+}
+
+function must<T>(res: { data: T; error: { message: string } | null }): T {
+  if (res.error) {
+    console.error(res.error);
+    throw new HttpError(500, 'Database error. Please try again.');
+  }
+  return res.data;
+}
+
+// ---------------------------------------------------------------- Encoding / crypto
+const enc = new TextEncoder();
+
+function b64url(bytes: Uint8Array): string {
+  let bin = '';
+  for (const b of bytes) bin += String.fromCharCode(b);
+  return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+function fromB64url(s: string): Uint8Array<ArrayBuffer> {
+  const b = atob(s.replace(/-/g, '+').replace(/_/g, '/') + '==='.slice((s.length + 3) % 4));
+  return Uint8Array.from(b, (c) => c.charCodeAt(0));
+}
+
+function randomToken(bytes = 24): string {
+  return b64url(crypto.getRandomValues(new Uint8Array(bytes)));
+}
+
+function safeEqual(a: string, b: string): boolean {
+  const x = enc.encode(a);
+  const y = enc.encode(b);
+  let diff = x.length ^ y.length;
+  for (let i = 0; i < Math.max(x.length, y.length); i++) diff |= (x[i] ?? 0) ^ (y[i] ?? 0);
+  return diff === 0;
+}
+
+async function hmac(secret: string, data: string): Promise<string> {
+  const key = await crypto.subtle.importKey('raw', enc.encode(secret), { name: 'HMAC', hash: 'SHA-256' }, false, [
+    'sign',
+  ]);
+  return b64url(new Uint8Array(await crypto.subtle.sign('HMAC', key, enc.encode(data))));
+}
+
+async function sha256(s: string): Promise<string> {
+  return b64url(new Uint8Array(await crypto.subtle.digest('SHA-256', enc.encode(s))));
+}
+
+// ---------------------------------------------------------------- PIN hashing (PBKDF2-SHA256)
+const PBKDF2_ITER = 150_000;
+
+async function pbkdf2(pin: string, salt: Uint8Array<ArrayBuffer>, iter: number): Promise<Uint8Array> {
+  const key = await crypto.subtle.importKey('raw', enc.encode(pin), 'PBKDF2', false, ['deriveBits']);
+  const bits = await crypto.subtle.deriveBits({ name: 'PBKDF2', hash: 'SHA-256', salt, iterations: iter }, key, 256);
+  return new Uint8Array(bits);
+}
+
+async function hashPin(pin: string): Promise<string> {
+  const salt = crypto.getRandomValues(new Uint8Array(16));
+  const h = await pbkdf2(pin, salt, PBKDF2_ITER);
+  return `pbkdf2$${PBKDF2_ITER}$${b64url(salt)}$${b64url(h)}`;
+}
+
+async function verifyPin(pin: string, stored: string): Promise<boolean> {
+  const [alg, iter, salt, hash] = stored.split('$');
+  if (alg !== 'pbkdf2' || !iter || !salt || !hash) return false;
+  const h = await pbkdf2(pin, fromB64url(salt), Number(iter));
+  return safeEqual(b64url(h), hash);
+}
+
+const PIN_RE = /^\d{4,8}$/;
+
+// ---------------------------------------------------------------- Teacher session tokens (HMAC signed)
+function sessionSecret(): string {
+  const s = Deno.env.get('TEACHER_SESSION_SECRET') ?? '';
+  if (s.length < 24 || s.startsWith('CHANGE-ME')) {
+    throw new HttpError(500, 'TEACHER_SESSION_SECRET is not configured on the server.');
+  }
+  return s;
+}
+
+interface SessionPayload {
+  sub: 'teacher';
+  exp: number; // unix seconds
+  pv: string; // fingerprint of the PIN hash — changing the PIN signs everyone out
+}
+
+async function signSession(p: SessionPayload): Promise<string> {
+  const body = b64url(enc.encode(JSON.stringify(p)));
+  return `${body}.${await hmac(sessionSecret(), body)}`;
+}
+
+async function readSession(token: string | null): Promise<SessionPayload | null> {
+  if (!token) return null;
+  const [body, sig] = token.split('.');
+  if (!body || !sig) return null;
+  if (!safeEqual(sig, await hmac(sessionSecret(), body))) return null;
+  try {
+    const p = JSON.parse(new TextDecoder().decode(fromB64url(body))) as SessionPayload;
+    if (p.sub !== 'teacher' || typeof p.exp !== 'number' || p.exp < Date.now() / 1000) return null;
+    return p;
+  } catch {
+    return null;
+  }
+}
+
+async function pinFingerprint(pinHash: string | null): Promise<string> {
+  return (await sha256(pinHash ?? 'initial-pin')).slice(0, 12);
+}
+
+// ---------------------------------------------------------------- Misc
+function clientIp(req: Request): string {
+  return (
+    req.headers.get('x-forwarded-for')?.split(',')[0].trim() ||
+    req.headers.get('cf-connecting-ip') ||
+    req.headers.get('x-real-ip') ||
+    'unknown'
+  );
+}
+
+function str(v: unknown, max = 200): string {
+  return typeof v === 'string' ? v.replace(/[<>]/g, '').replace(/\s+/g, ' ').trim().slice(0, max) : '';
+}
+
+// ---------- shared: sentence.ts ----------
+
+// ---------- function ----------
+// Public "Scan to hear me read" endpoint used by the QR code on printed cards.
+// The QR code holds a long random share token (not a signed URL), so it never expires.
+// Each scan gets a fresh, short-lived signed URL for the audio — and only while the
+// teacher keeps the submission APPROVED. Rejecting or deleting a card disables its QR code.
+
+serve(async (req) => {
+  let token = '';
+  if (req.method === 'POST') token = str((await req.json().catch(() => ({}))).token, 64);
+  else token = str(new URL(req.url).searchParams.get('t'), 64);
+  if (!/^[A-Za-z0-9_-]{20,64}$/.test(token)) throw new HttpError(404, 'This recording could not be found.');
+
+  const db = admin();
+  const row = must(
+    await db
+      .from('submissions')
+      .select('pupil_name, class_name, sentence, audio_path, audio_mime, status')
+      .eq('share_token', token)
+      .maybeSingle(),
+  ) as { pupil_name: string; class_name: string; sentence: string; audio_path: string; audio_mime: string | null; status: string } | null;
+
+  if (!row || row.status !== 'approved') throw new HttpError(404, 'This recording could not be found.');
+
+  const signed = await db.storage.from(BUCKET).createSignedUrl(row.audio_path, 30 * 60);
+  if (signed.error || !signed.data) throw new HttpError(500, 'Could not load the recording. Please try again.');
+
+  const settings = must(await db.from('app_settings').select('classroom_name').eq('id', 1).single()) as {
+    classroom_name: string;
+  };
+
+  return json(req, {
+    pupil_name: row.pupil_name,
+    class_name: row.class_name,
+    sentence: row.sentence,
+    audio_url: signed.data.signedUrl,
+    audio_mime: row.audio_mime,
+    classroom_name: settings.classroom_name,
+  });
+});

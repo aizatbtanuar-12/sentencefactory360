@@ -142,6 +142,10 @@ supabase secrets set --env-file supabase/functions/.env
 (Or set them in **Dashboard → Edge Functions → Secrets**.)
 
 ### 4.4 Deploy the Edge Functions
+
+> **No command line?** Use the ready-to-paste single files in [`supabase/dashboard-paste/`](supabase/dashboard-paste/README.md) with the dashboard's **Deploy a new function → Via Editor**, then turn **Enforce JWT verification** off for each.
+
+With the CLI:
 ```bash
 supabase functions deploy student --no-verify-jwt
 supabase functions deploy teacher --no-verify-jwt
