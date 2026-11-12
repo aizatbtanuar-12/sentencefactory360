@@ -1,4 +1,5 @@
 import { Mascot } from '../components/Mascot';
+import { CopyrightFooter } from '../components/ui';
 
 export function Welcome({
   classroomName,
@@ -54,6 +55,7 @@ export function Welcome({
           </p>
         )}
       </div>
+      <CopyrightFooter className="copyright-welcome" />
     </div>
   );
 }

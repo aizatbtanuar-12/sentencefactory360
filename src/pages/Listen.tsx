@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { api, type ListenData } from '../api';
 import { Mascot } from '../components/Mascot';
-import { Spinner } from '../components/ui';
+import { CopyrightFooter, Spinner } from '../components/ui';
 
 /** Public page opened by the QR code on a printed card. Shows no photo, only the name, sentence and voice. */
 export default function Listen() {
@@ -68,6 +68,7 @@ export default function Listen() {
           </>
         )}
       </div>
+      <CopyrightFooter />
     </div>
   );
 }

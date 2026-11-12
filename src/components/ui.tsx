@@ -1,4 +1,5 @@
 import { Fragment, useEffect, type ReactNode } from 'react';
+import { COPYRIGHT, copyrightLine } from '../lib/copyright';
 import { useOnline } from '../lib/hooks';
 import { buildSentence, type SentenceParts } from '../lib/sentence';
 
@@ -122,4 +123,14 @@ export function AudioPlayer(props: React.AudioHTMLAttributes<HTMLAudioElement>) 
     }
   };
   return <audio controls preload="metadata" {...props} onLoadedMetadata={onMeta} />;
+}
+
+/** Copyright footer. `full` adds the usage terms (Teacher Zone). */
+export function CopyrightFooter({ full = false, className = '' }: { full?: boolean; className?: string }) {
+  return (
+    <footer className={`copyright ${className}`}>
+      <div>Sentence Factory 360° {copyrightLine()}</div>
+      {full && <div className="copyright-terms">{COPYRIGHT.terms}</div>}
+    </footer>
+  );
 }

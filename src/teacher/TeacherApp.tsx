@@ -3,7 +3,7 @@ import { NavLink, Route, Routes, useNavigate } from 'react-router-dom';
 import { api, isDemo, type TeacherProfile } from '../api';
 import { clearToken, getToken, onSessionChange } from '../api/session';
 import { Mascot } from '../components/Mascot';
-import { OfflineBanner } from '../components/ui';
+import { CopyrightFooter, OfflineBanner } from '../components/ui';
 import { useIdle } from '../lib/hooks';
 import { CardPage } from './CardPage';
 import { Gallery } from './Gallery';
@@ -85,6 +85,7 @@ export default function TeacherApp() {
           <Route path="*" element={<Overview />} />
         </Routes>
       </main>
+      <CopyrightFooter full className="no-print" />
     </div>
   );
 }

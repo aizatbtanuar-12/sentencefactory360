@@ -2,6 +2,7 @@ import { useState } from 'react';
 import type { Submission, TeacherPublic } from '../api';
 import { ColourSentence } from './ui';
 import { Mascot } from './Mascot';
+import { copyrightShort } from '../lib/copyright';
 
 /** A6 portrait learning card (105 × 148 mm). Sized in mm so print matches exactly. */
 export function SentenceCard({ s, qr, teacher }: { s: Submission; qr: string | null; teacher?: TeacherPublic | null }) {
@@ -51,6 +52,7 @@ export function SentenceCard({ s, qr, teacher }: { s: Submission; qr: string | n
           )}
         </div>
       </footer>
+      <div className="a6-copy">Sentence Factory 360° {copyrightShort()}. All rights reserved.</div>
     </article>
   );
 }

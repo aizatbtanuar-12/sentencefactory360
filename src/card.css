@@ -243,3 +243,14 @@
 .a6-teacher .a6-classroom {
   margin-top: 0.2mm;
 }
+.a6-bottom {
+  padding-bottom: 1.5mm;
+}
+.a6-copy {
+  text-align: center;
+  font-size: 5.5pt;
+  font-weight: 700;
+  color: #8a97ab;
+  padding: 0 4mm 1.8mm;
+  letter-spacing: 0.02em;
+}

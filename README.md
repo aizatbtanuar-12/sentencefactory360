@@ -6,6 +6,8 @@ A tablet learning station for Year 3 English, for **one teacher or a whole schoo
 
 > **Every child can build a sentence. Every child deserves to be heard.**
 
+**© 2026 Nurhajrina Jarawi. All rights reserved.** Free for teachers to use in class with permission. Do not copy, modify, sell or redistribute. The copyright notice is shown on the welcome screen, every Teacher Zone page, the QR listen page and every printed card. It is set in `src/lib/copyright.ts`, and teachers cannot change it from the app.
+
 | Welcome | Build | Read aloud |
 |---|---|---|
 | ![](docs/screenshots/welcome.jpg) | ![](docs/screenshots/build.jpg) | ![](docs/screenshots/voice.jpg) |

@@ -2191,3 +2191,41 @@ img {
     grid-template-columns: 1fr;
   }
 }
+
+/* ------------------------------------------------------------ copyright */
+.copyright {
+  text-align: center;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--muted);
+  padding: 14px 16px 18px;
+  line-height: 1.4;
+}
+.copyright-terms {
+  font-weight: 600;
+  font-size: 0.75rem;
+  opacity: 0.85;
+}
+.welcome {
+  grid-template-rows: 1fr auto;
+}
+.copyright-welcome {
+  position: relative;
+  padding-bottom: 8px;
+}
+.teacher-shell {
+  display: flex;
+  flex-direction: column;
+}
+.teacher-main {
+  flex: 1;
+  width: 100%;
+}
+.pin-page,
+.listen-page {
+  grid-template-rows: 1fr auto;
+}
+.pin-page .copyright,
+.listen-page .copyright {
+  align-self: end;
+}

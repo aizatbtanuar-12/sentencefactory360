@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api, isDemo, type LoginTeacher } from '../api';
 import { Mascot } from '../components/Mascot';
-import { Spinner } from '../components/ui';
+import { CopyrightFooter, Spinner } from '../components/ui';
 
 export const TITLES = ['Teacher', 'Cikgu', 'Puan', 'Encik', 'Mrs', 'Ms', 'Mr', 'Miss', 'Dr'];
 
@@ -156,6 +156,7 @@ export function PinLogin() {
           />
         )}
       </div>
+      <CopyrightFooter full />
     </div>
   );
 }
